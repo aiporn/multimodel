@@ -6,6 +6,8 @@ Image processing models.
 
 import tensorflow as tf
 
+IMAGE_SIZE = 224
+
 class ImageNetwork:
     """
     The core image processing module, implemented as a convolutional neural
@@ -13,8 +15,8 @@ class ImageNetwork:
     """
     def __init__(self, image_batch):
         assert image_batch.get_shape()[-1] == 3
-        assert image_batch.get_shape()[-2] == 224
-        assert image_batch.get_shape()[-3] == 224
+        assert image_batch.get_shape()[-2] == IMAGE_SIZE
+        assert image_batch.get_shape()[-3] == IMAGE_SIZE
         self._training_ph = tf.placeholder_with_default(False, ())
         self._features = _resnet_34(image_batch, self._training_ph)
 
