@@ -5,6 +5,7 @@ This model takes several thumbnails from random parts of a video and predicts
 their relative popularities.
 """
 
+import numpy as np
 import tensorflow as tf
 
 class HotspotPredictor:
@@ -16,10 +17,10 @@ class HotspotPredictor:
     by N.
     """
     def __init__(self, image_network, num_timestamps=5):
-        batch_size = tf.shape(image_network)[0]
-        feature_size = tf.shape(image_network)[1]
+        batch_size = tf.shape(image_network.features)[0]
+        feature_size = tf.shape(image_network.features)[1]
         sub_batch_shape = (batch_size//num_timestamps, num_timestamps, feature_size)
-        split_batches = tf.reshape(image_network, sub_batch_shape)
+        split_batches = tf.reshape(image_network.features, sub_batch_shape)
 
         # For now, the intensity prediction at each
         # timestamp will be a simple dot product.
@@ -38,7 +39,8 @@ class HotspotPredictor:
         """
         return self._predictions
 
-    def loss(self, actual_intensities, rescale_fn=tf.log):
+    def loss(self, actual_intensities,
+             rescale_fn=lambda x: tf.clip_by_value(tf.log(x), 1, np.inf)):
         """
         Compute the prediction loss.
 
