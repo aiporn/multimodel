@@ -2,12 +2,78 @@
 Tools for reading data and feeding it into a model.
 """
 
+# pylint: disable=E0611,E0401,E1101
+
 import glob
 import json
 import os
 import random
 
 from scipy.interpolate import interp1d
+import tensorflow as tf
+from tensorflow.contrib.data import Dataset
+
+from .images import IMAGE_SIZE
+
+def hotspot_dataset(data_dir, num_timestamps=5):
+    """
+    Create a dataset for training a HotspotPredictor.
+
+    Args:
+      data_dir: a DataDir.
+      num_timestamps: the number of timestamps to per video.
+
+    Returns:
+      A shuffled TensorFlow Dataset of (images, intensities), where images
+        and intensities are batches.
+    """
+    generator_fn = lambda: data_dir.hotspot_data(num_timestamps=num_timestamps)
+    dataset = Dataset.from_generator(generator_fn,
+                                     (tf.string, tf.float32),
+                                     output_shapes=((num_timestamps,), (num_timestamps,)))
+    return dataset.map(lambda x, y: (tf.stack([_read_image(p) for p in x]), y))
+
+def popularity_dataset(data_dir):
+    """
+    Create a dataset for training a PopularityPredictor.
+
+    Args:
+      data_dir: A DataDir.
+
+    Returns:
+      A shuffled TensorFlow Dataset of (image, like_frac, views) tuples.
+    """
+    def generator_fn():
+        """
+        Generate (image_path, like_frac, views) tuples.
+        """
+        for thumbnail, _, metadata in data_dir.all_thumbnails():
+            like_frac = metadata['votes_up'] / (metadata['votes_up'] + metadata['votes_down'])
+            yield thumbnail, like_frac, metadata['views']
+    dataset = Dataset.from_generator(generator_fn, (tf.string, tf.float32, tf.float32))
+    return dataset.shuffle(buffer_size=20000).map(_read_image_in_tuple)
+
+def category_dataset(data_dir, labels):
+    """
+    Create a dataset for training a CategoryTagger.
+
+    Args:
+      data_dir: A DataDir.
+      labels: the string class labels to use.
+
+    Returns:
+      A shuffled TensorFlow Dataset of (image, categories) pairs.
+    """
+    def generator_fn():
+        """
+        Generate (image_path, category_vector) pairs.
+        """
+        for thumbnail, _, metadata in data_dir.all_thumbnails():
+            bitmask = [l in metadata['categories'] for l in labels]
+            yield thumbnail, bitmask
+    dataset = Dataset.from_generator(generator_fn, (tf.string, tf.bool),
+                                     output_shapes=((), (len(labels),)))
+    return dataset.shuffle(buffer_size=20000).map(_read_image_in_tuple)
 
 class DataDir:
     """
@@ -119,3 +185,22 @@ class DataDir:
                  for i, _ in enumerate(metadata['hotspots'])]
         counts = metadata['hotspots']
         return interp1d(times, counts)
+
+def _read_image_in_tuple(path, *args):
+    """
+    Read the image path and keep the other data unchanged.
+    """
+    return (_read_image(path),) + tuple(args)
+
+def _read_image(path):
+    """
+    Create a TensorFlow image from the image path.
+
+    Automatically scales the image and does data augmentation.
+    """
+    data = tf.read_file(path)
+    raw = tf.image.decode_image(data, channels=3)
+    image = tf.image.resize_image_with_crop_or_pad(raw, IMAGE_SIZE, IMAGE_SIZE)
+    float_image = tf.cast(image, tf.float32) / 0xff
+    noise = tf.constant([0.0148366, 0.01253134, 0.01040762], dtype=tf.float32)
+    return float_image + noise * tf.random_normal(())
