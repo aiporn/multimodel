@@ -12,33 +12,31 @@ import random
 
 from scipy.interpolate import interp1d
 import tensorflow as tf
-from tensorflow.contrib.data import Dataset
 
 from .images import IMAGE_SIZE
 
-def hotspot_dataset(data_dir, num_timestamps=5):
+def hotspot_dataset(data_dir, num_timestamps=5, num_passes=5):
     """
     Create a dataset for training a HotspotPredictor.
 
     Args:
       data_dir: a DataDir.
       num_timestamps: the number of timestamps to per video.
+      num_passes: examples to generate per video.
 
     Returns:
       A shuffled TensorFlow Dataset of (images, intensities), where images
         and intensities are batches.
     """
-    generator_fn = lambda: data_dir.hotspot_data(num_timestamps=num_timestamps)
-    dataset = Dataset.from_generator(generator_fn,
-                                     (tf.string, tf.float32),
-                                     output_shapes=((num_timestamps,), (num_timestamps,)))
-    def read_images_fn(image_paths, labels):
-        """
-        Read the images from the paths.
-        """
-        tensors = [_read_image(image_paths[i]) for i in range(num_timestamps)]
-        return tf.stack(tensors), labels
-    return dataset.map(read_images_fn)
+    data = []
+    for _ in range(num_passes):
+        data += [pair
+                 for xs, ys in data_dir.hotspot_data(num_timestamps=num_timestamps)
+                 for pair in zip(xs, ys)]
+    paths, labels = zip(*data)
+    dataset = tf.data.Dataset.from_tensor_slices((tf.constant(paths),
+                                                  tf.constant(labels, dtype=tf.float32)))
+    return dataset.map(_read_image_in_tuple).batch(num_timestamps)
 
 def popularity_dataset(data_dir):
     """
@@ -50,14 +48,15 @@ def popularity_dataset(data_dir):
     Returns:
       A shuffled TensorFlow Dataset of (image, like_frac, views) tuples.
     """
-    def generator_fn():
-        """
-        Generate (image_path, like_frac, views) tuples.
-        """
-        for thumbnail, _, metadata in data_dir.all_thumbnails():
-            like_frac = metadata['votes_up'] / (metadata['votes_up'] + metadata['votes_down'])
-            yield thumbnail, like_frac, metadata['views']
-    dataset = Dataset.from_generator(generator_fn, (tf.string, tf.float32, tf.float32))
+    thumbnails, like_fracs, views = [], [], []
+    for thumbnail, _, metadata in data_dir.all_thumbnails():
+        like_frac = metadata['votes_up'] / (metadata['votes_up'] + metadata['votes_down'])
+        thumbnails.append(thumbnail)
+        like_fracs.append(like_frac)
+        views.append(metadata['views'])
+    dataset = tf.data.Dataset.from_tensor_slices((tf.constant(thumbnails),
+                                                  tf.constant(like_fracs, dtype=tf.float32),
+                                                  tf.constant(views, dtype=tf.float32)))
     return dataset.shuffle(buffer_size=20000).map(_read_image_in_tuple)
 
 def category_dataset(data_dir, labels):
@@ -71,15 +70,12 @@ def category_dataset(data_dir, labels):
     Returns:
       A shuffled TensorFlow Dataset of (image, categories) pairs.
     """
-    def generator_fn():
-        """
-        Generate (image_path, category_vector) pairs.
-        """
-        for thumbnail, _, metadata in data_dir.all_thumbnails():
-            bitmask = [l in metadata['categories'] for l in labels]
-            yield thumbnail, bitmask
-    dataset = Dataset.from_generator(generator_fn, (tf.string, tf.bool),
-                                     output_shapes=((), (len(labels),)))
+    thumbnails, bitmasks = [], []
+    for thumbnail, _, metadata in data_dir.all_thumbnails():
+        thumbnails.append(thumbnail)
+        bitmasks.append([l in metadata['categories'] for l in labels])
+    dataset = tf.data.Dataset.from_tensor_slices((tf.constant(thumbnails),
+                                                  tf.constant(bitmasks)))
     return dataset.shuffle(buffer_size=20000).map(_read_image_in_tuple)
 
 class DataDir:
@@ -151,29 +147,33 @@ class DataDir:
 
     def video_thumbnails(self, video_id):
         """
-        Iterate over all the thumbnails of a video.
+        Get all the thumbnails of a video.
 
         Returns:
-          An iterator of tuples with two entries:
+          A sequence of tuples with two entries:
             thumbnail_path: path to thumbnail image.
             thumbnail_time: timestamp of the thumbnail.
         """
         thumbs = glob.glob(os.path.join(self._id_to_path[video_id], 'thumbnail_*.*'))
+        pairs = []
         for thumb_path in thumbs:
             timestamp = int(thumb_path.split('_')[-1].split('.')[0])
-            yield thumb_path, timestamp
+            pairs.append((thumb_path, timestamp))
+        return sorted(pairs, key=lambda x: x[1])
 
     def hotspot_data(self, num_timestamps=5):
         """
-        Iterate over random batches for hotspot training.
+        Generate hotspot training data.
+
+        Iterates over the videos once and selects a random set of thumbnails
+        for each video.
 
         Returns:
           An iterator of tuples with two entries:
             thumbnail_paths: paths to num_timestamps thumbnails.
             intensities: a list of intensities, one per thumbnail.
         """
-        while True:
-            video_id = random.choice(self.video_ids)
+        for video_id in self.video_ids:
             hotspot_func = self.hotspot_function(video_id)
             thumbnails = [th for th in self.video_thumbnails(video_id)]
             if hotspot_func is None or len(thumbnails) < num_timestamps:
@@ -181,7 +181,7 @@ class DataDir:
             while len(thumbnails) > num_timestamps:
                 del thumbnails[random.randrange(len(thumbnails))]
             paths, timestamps = zip(*thumbnails)
-            yield list(paths), [hotspot_func(t) for t in timestamps]
+            yield list(paths), [float(hotspot_func(t)) for t in timestamps]
 
     def hotspot_function(self, video_id):
         """
@@ -194,10 +194,10 @@ class DataDir:
         metadata = self._id_to_meta[video_id]
         if metadata['hotspots'] is None:
             return None
-        times = [i * metadata['duration'] / len(metadata['hotspots'])
+        times = [i * metadata['duration'] / (len(metadata['hotspots'])-1)
                  for i, _ in enumerate(metadata['hotspots'])]
         counts = metadata['hotspots']
-        return interp1d(times, counts)
+        return interp1d(times, counts, fill_value='extrapolate')
 
 def _read_image_in_tuple(path, *args):
     """
