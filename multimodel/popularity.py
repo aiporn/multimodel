@@ -18,7 +18,8 @@ class PopularityPredictor:
     """
     def __init__(self, image_network):
         predictions = tf.layers.dense(image_network.features, 2)
-        self._like_frac = tf.nn.sigmoid(predictions[:, 0])
+        self._like_logits = predictions[:, 0]
+        self._like_frac = tf.nn.sigmoid(self._like_logits)
         self._views = predictions[:, 1]
 
     @property
@@ -52,7 +53,7 @@ class PopularityPredictor:
           A 0-D Tensor representing the mean prediction loss.
         """
         like_loss = tf.nn.sigmoid_cross_entropy_with_logits(labels=actual_like_frac,
-                                                            logits=self._like_frac)
+                                                            logits=self._like_logits)
         like_loss = tf.reduce_mean(like_loss)
         view_loss = tf.reduce_mean(tf.square(rescale_fn(actual_views) - self.views))
         return like_loss + _VIEW_LOSS_SCALE * view_loss
