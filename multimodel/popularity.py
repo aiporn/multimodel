@@ -10,7 +10,7 @@ import numpy as np
 import tensorflow as tf
 
 # Bring the view loss down to a reasonable magnitude.
-_VIEW_LOSS_SCALE = 1 / (math.log(1e5) ** 2)
+_VIEW_LOSS_SCALE = 1 / (math.log(1e4) ** 2)
 
 class PopularityPredictor:
     """
@@ -38,7 +38,7 @@ class PopularityPredictor:
         return self._views
 
     def loss(self, actual_like_frac, actual_views,
-             rescale_fn=lambda x: tf.clip_by_value(tf.log(x), 0, np.inf)):
+             rescale_fn=lambda x: tf.log(tf.clip_by_value(x, 1, np.inf))):
         """
         Compute the prediction loss.
 
@@ -51,6 +51,8 @@ class PopularityPredictor:
         Returns:
           A 0-D Tensor representing the mean prediction loss.
         """
-        like_loss = tf.reduce_mean(tf.square(actual_like_frac - self.like_frac))
+        like_loss = tf.nn.sigmoid_cross_entropy_with_logits(labels=actual_like_frac,
+                                                            logits=self._like_frac)
+        like_loss = tf.reduce_mean(like_loss)
         view_loss = tf.reduce_mean(tf.square(rescale_fn(actual_views) - self.views))
         return like_loss + _VIEW_LOSS_SCALE * view_loss

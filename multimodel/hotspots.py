@@ -40,7 +40,7 @@ class HotspotPredictor:
         return self._predictions
 
     def loss(self, actual_intensities,
-             rescale_fn=lambda x: tf.clip_by_value(tf.log(x), 0, np.inf)):
+             rescale_fn=lambda x: tf.log(tf.clip_by_value(x, 1, np.inf))):
         """
         Compute the prediction loss.
 
@@ -50,12 +50,11 @@ class HotspotPredictor:
             neural-friendly range.
 
         Returns:
-          A 0-D Tensor representing the mean cosine distance between the
-            actual and target histograms.
+          A 0-D Tensor representing the distance between the actual and target
+            histograms.
         """
         actual = _subtract_mean(rescale_fn(actual_intensities))
-        prods = _normalize_mag(self.predictions) * _normalize_mag(actual)
-        return 1 + tf.negative(tf.reduce_mean(tf.reduce_sum(prods, axis=1)))
+        return tf.reduce_mean(tf.square(self.predictions - actual))
 
 def _subtract_mean(vector_batch):
     """
@@ -63,9 +62,3 @@ def _subtract_mean(vector_batch):
     """
     means = tf.expand_dims(tf.reduce_mean(vector_batch, axis=1), axis=1)
     return vector_batch - means
-
-def _normalize_mag(vector_batch):
-    """
-    For each vector in a batch, divide by the norm.
-    """
-    return vector_batch / tf.norm(vector_batch, axis=1, keep_dims=True)

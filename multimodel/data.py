@@ -176,7 +176,7 @@ class DataDir:
         """
         return os.path.join(self._id_to_path[video_id], 'thumbnail_%d.jpg'%timestamp)
 
-    def hotspot_data(self, num_timestamps=5):
+    def hotspot_data(self, num_timestamps=5, remove_outliers=True):
         """
         Generate hotspot training data.
 
@@ -192,8 +192,14 @@ class DataDir:
             video_id = random.choice(self.video_ids)
             hotspot_func = self.hotspot_function(video_id)
             thumbnails = [th for th in self.video_thumbnails(video_id)]
+
+            # The beginning of the video usually has too many views.
+            while remove_outliers and thumbnails and thumbnails[0][1] < 20:
+                del thumbnails[0]
+
             if hotspot_func is None or len(thumbnails) < num_timestamps:
                 continue
+
             while len(thumbnails) > num_timestamps:
                 del thumbnails[random.randrange(len(thumbnails))]
             _, timestamps = zip(*thumbnails)
