@@ -18,7 +18,7 @@ class HotspotPredictor:
     """
     def __init__(self, image_network, num_timestamps=5):
         batch_size = tf.shape(image_network.features)[0]
-        feature_size = tf.shape(image_network.features)[1]
+        feature_size = image_network.features.get_shape()[1]
         sub_batch_shape = (batch_size//num_timestamps, num_timestamps, feature_size)
         split_batches = tf.reshape(image_network.features, sub_batch_shape)
 

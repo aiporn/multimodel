@@ -75,7 +75,7 @@ class Aggregate:
             self._popularity_model = PopularityPredictor(image_network)
 
         self._category_images = _image_or_placeholder(category_images)
-        with tf.variable_scope('image_nework', reuse=True):
+        with tf.variable_scope('image_network', reuse=True):
             image_network = ImageNetwork(self._category_images)
         with tf.variable_scope('categories'):
             self._category_model = CategoryTagger(image_network)

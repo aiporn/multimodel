@@ -32,7 +32,13 @@ def hotspot_dataset(data_dir, num_timestamps=5):
     dataset = Dataset.from_generator(generator_fn,
                                      (tf.string, tf.float32),
                                      output_shapes=((num_timestamps,), (num_timestamps,)))
-    return dataset.map(lambda x, y: (tf.stack([_read_image(p) for p in x]), y))
+    def read_images_fn(image_paths, labels):
+        """
+        Read the images from the paths.
+        """
+        tensors = [_read_image(image_paths[i]) for i in range(num_timestamps)]
+        return tf.stack(tensors), labels
+    return dataset.map(read_images_fn)
 
 def popularity_dataset(data_dir):
     """
@@ -101,7 +107,7 @@ class DataDir:
         self._id_to_path = {}
         for entry in os.listdir(path):
             dir_path = os.path.join(path, entry)
-            json_path = os.path.join(dir_path, 'matadata.json')
+            json_path = os.path.join(dir_path, 'metadata.json')
             if (entry.startswith('.') or not os.path.isdir(dir_path) or
                     not os.path.exists(json_path)):
                 continue
@@ -220,6 +226,6 @@ def _is_validation(video_id):
     the MD5 hash of the ID is 0 or 1.
     """
     hasher = md5()
-    hasher.update(bytes(url, 'utf-8'))
+    hasher.update(bytes(video_id, 'utf-8'))
     first = hasher.hexdigest()[0]
     return first in ['0', '1']

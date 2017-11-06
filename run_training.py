@@ -27,12 +27,16 @@ def main(data_path):
     print('Loading validation data...')
     validation = DataDir(data_path, validation=True)
 
+    print('Sizes: train=%d validation=%d' %
+          (len(training.video_ids), len(validation.video_ids)))
+
     print('Creating models...')
     with tf.variable_scope('aggregate'):
         _, train_loss = aggregate_from_data(training)
     with tf.variable_scope('aggregate', reuse=True):
         _, validation_loss = aggregate_from_data(validation)
-    cur_iter = tf.assign_add(tf.Variable(0, dtype=tf.int32, name='cur_iter'), 1)
+    cur_iter = tf.assign_add(tf.Variable(0, dtype=tf.int32, name='cur_iter'),
+                             tf.constant(1, dtype=tf.int32))
     minim = make_minimizer(train_loss, cur_iter)
 
     training_loop(train_loss, validation_loss, cur_iter, minim)
@@ -43,7 +47,7 @@ def make_minimizer(loss, cur_iter):
 
     The learning rate may decay based on the iteration number.
     """
-    rate = 1e-3 * tf.pow(0.9999, cur_iter)
+    rate = 1e-3 * tf.pow(0.9999, tf.cast(cur_iter, tf.float32))
     optim = tf.train.AdamOptimizer(learning_rate=rate)
     return optim.minimize(loss)
 
