@@ -5,6 +5,7 @@ Tools for reading data and feeding it into a model.
 # pylint: disable=E0611,E0401,E1101
 
 import glob
+from hashlib import md5
 import json
 import os
 import random
@@ -86,9 +87,14 @@ class DataDir:
     Works with the directory structure produced by:
     https://github.com/aiporn/pornhub-scraper.
     """
-    def __init__(self, path):
+    def __init__(self, path, validation=False):
         """
-        Load meta-data about a data directory.
+        Read a data directory.
+
+        Args:
+          path: path to the directory of data.
+          validation: if True, load the validation set. Otherwise, load the
+            training set.
         """
         self._root_dir = path
         self._id_to_meta = {}
@@ -101,8 +107,9 @@ class DataDir:
                 continue
             with open(json_path, 'r') as json_file:
                 metadata = json.load(json_file)
-            self._id_to_meta[metadata['id']] = metadata
-            self._id_to_path[metadata['id']] = dir_path
+            if _is_validation(metadata['id']) == validation:
+                self._id_to_meta[metadata['id']] = metadata
+                self._id_to_path[metadata['id']] = dir_path
         self._sorted_ids = sorted(list(self._id_to_path.keys()))
 
     @property
@@ -204,3 +211,15 @@ def _read_image(path):
     float_image = tf.cast(image, tf.float32) / 0xff
     noise = tf.constant([0.0148366, 0.01253134, 0.01040762], dtype=tf.float32)
     return float_image + noise * tf.random_normal(())
+
+def _is_validation(video_id):
+    """
+    Check if a video ID should be sent to the validation set.
+
+    The validation set is defined as the videos such that the first digit of
+    the MD5 hash of the ID is 0 or 1.
+    """
+    hasher = md5()
+    hasher.update(bytes(url, 'utf-8'))
+    first = hasher.hexdigest()[0]
+    return first in ['0', '1']
