@@ -31,16 +31,19 @@ def main(data_path):
           (len(training.video_ids), len(validation.video_ids)))
 
     print('Creating models...')
+    train_feed = {}
     with tf.variable_scope('aggregate'):
         agg, train_loss = aggregate_from_data(training)
+        train_feed.update(agg.training_feed_dict())
     with tf.variable_scope('aggregate', reuse=True):
-        _, validation_loss = aggregate_from_data(validation)
+        agg, validation_loss = aggregate_from_data(validation)
+        train_feed.update(agg.training_feed_dict())
     cur_iter = tf.assign_add(tf.Variable(0, dtype=tf.int32, name='cur_iter'),
                              tf.constant(1, dtype=tf.int32))
     minim = make_minimizer(train_loss, cur_iter)
 
     print('Training...')
-    training_loop(train_loss, validation_loss, cur_iter, minim, agg.training_feed_dict())
+    training_loop(train_loss, validation_loss, cur_iter, minim, train_feed)
 
 def make_minimizer(loss, cur_iter):
     """
