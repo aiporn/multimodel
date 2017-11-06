@@ -158,9 +158,9 @@ class DataDir:
             thumbnail_path: path to thumbnail image.
             thumbnail_time: timestamp of the thumbnail.
         """
-        thumbs = glob.glob(os.path.join(self._id_to_path[video_id], 'thumbnail_*.png'))
+        thumbs = glob.glob(os.path.join(self._id_to_path[video_id], 'thumbnail_*.*'))
         for thumb_path in thumbs:
-            timestamp = int(thumb_path.split('_')[-1])
+            timestamp = int(thumb_path.split('_')[-1].split('.')[0])
             yield thumb_path, timestamp
 
     def hotspot_data(self, num_timestamps=5):
