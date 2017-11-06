@@ -230,7 +230,6 @@ def _thumbnail_reader(data_dir):
         """
         Load the image.
         """
-        # TODO: avoid py_func here by moving the path logic into TF.
         path = tf.py_func(thumbnail_to_path, [thumbnail_info], tf.string)
         return (_read_image(path),) + tuple(args)
     return map_fn
