@@ -4,8 +4,13 @@ Video popularity prediction.
 This model takes a video thumbnail and predicts the views and likes.
 """
 
+import math
+
 import numpy as np
 import tensorflow as tf
+
+# Bring the view loss down to a reasonable magnitude.
+_VIEW_LOSS_SCALE = 1 / (math.log(1e5) ** 2)
 
 class PopularityPredictor:
     """
@@ -48,4 +53,4 @@ class PopularityPredictor:
         """
         like_loss = tf.reduce_mean(tf.square(actual_like_frac - self.like_frac))
         view_loss = tf.reduce_mean(tf.square(rescale_fn(actual_views) - self.views))
-        return like_loss + view_loss
+        return like_loss + _VIEW_LOSS_SCALE * view_loss

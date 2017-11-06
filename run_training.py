@@ -32,14 +32,15 @@ def main(data_path):
 
     print('Creating models...')
     with tf.variable_scope('aggregate'):
-        _, train_loss = aggregate_from_data(training)
+        agg, train_loss = aggregate_from_data(training)
     with tf.variable_scope('aggregate', reuse=True):
         _, validation_loss = aggregate_from_data(validation)
     cur_iter = tf.assign_add(tf.Variable(0, dtype=tf.int32, name='cur_iter'),
                              tf.constant(1, dtype=tf.int32))
     minim = make_minimizer(train_loss, cur_iter)
 
-    training_loop(train_loss, validation_loss, cur_iter, minim)
+    print('Training...')
+    training_loop(train_loss, validation_loss, cur_iter, minim, agg.training_feed_dict())
 
 def make_minimizer(loss, cur_iter):
     """
@@ -51,7 +52,7 @@ def make_minimizer(loss, cur_iter):
     optim = tf.train.AdamOptimizer(learning_rate=rate)
     return optim.minimize(loss)
 
-def training_loop(train_loss, validation_loss, cur_iter, minimize):
+def training_loop(train_loss, validation_loss, cur_iter, minimize, feed_dict):
     """
     Run the inner training loop.
     """
@@ -63,7 +64,7 @@ def training_loop(train_loss, validation_loss, cur_iter, minimize):
             saver.restore(sess, latest)
         while True:
             terms = (train_loss, validation_loss, cur_iter, minimize)
-            train, validation, iter_num, _ = sess.run(terms)
+            train, validation, iter_num, _ = sess.run(terms, feed_dict=feed_dict)
             print('iter %d: train_loss=%f val_loss=%f' % (iter_num, train, validation))
             if iter_num % SAVE_INTERVAL == 0:
                 saver.save(sess, os.path.join(SAVE_DIR, 'model'), global_step=iter_num)

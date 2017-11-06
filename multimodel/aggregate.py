@@ -62,21 +62,26 @@ class Aggregate:
             If None, a new placeholder is created.
           num_timestamps: number of timesteps for hotspots.
         """
+        self._train_feed = {}
+
         self._hotspot_images = _image_or_placeholder(hotspot_images)
         with tf.variable_scope('image_network'):
             image_network = ImageNetwork(self._hotspot_images)
+            self._train_feed.update(image_network.training_feed_dict())
         with tf.variable_scope('hotspots'):
             self._hotspot_model = HotspotPredictor(image_network, num_timestamps=num_timestamps)
 
         self._popularity_images = _image_or_placeholder(popularity_images)
         with tf.variable_scope('image_network', reuse=True):
             image_network = ImageNetwork(self._popularity_images)
+            self._train_feed.update(image_network.training_feed_dict())
         with tf.variable_scope('popularity'):
             self._popularity_model = PopularityPredictor(image_network)
 
         self._category_images = _image_or_placeholder(category_images)
         with tf.variable_scope('image_network', reuse=True):
             image_network = ImageNetwork(self._category_images)
+            self._train_feed.update(image_network.training_feed_dict())
         with tf.variable_scope('categories'):
             self._category_model = CategoryTagger(image_network)
 
@@ -121,6 +126,13 @@ class Aggregate:
         Get the category tagging model.
         """
         return self._category_model
+
+    def training_feed_dict(self):
+        """
+        Get a dict to feed into TF during training to indicate that the model
+        is being trained.
+        """
+        return self._train_feed
 
     def loss(self, hotspot_intensities, categories, like_fracs, views):
         """

@@ -48,8 +48,9 @@ class ImageTagger(ABC):
           A 0-D Tensor representing the mean loss.
         """
         numeric_labels = tf.cast(labels, self._logits.dtype)
-        return tf.nn.sigmoid_cross_entropy_with_logits(labels=numeric_labels,
-                                                       logits=self._logits)
+        raw = tf.nn.sigmoid_cross_entropy_with_logits(labels=numeric_labels,
+                                                      logits=self._logits)
+        return tf.reduce_mean(raw)
 
 class CategoryTagger(ImageTagger):
     """
