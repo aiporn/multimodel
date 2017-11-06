@@ -50,7 +50,11 @@ def popularity_dataset(data_dir):
     """
     thumbnails, like_fracs, views = [], [], []
     for thumbnail, _, metadata in data_dir.all_thumbnails():
-        like_frac = metadata['votes_up'] / (metadata['votes_up'] + metadata['votes_down'])
+        total_votes = metadata['votes_up'] + metadata['votes_down']
+        if total_votes == 0:
+            like_frac = 0.5
+        else:
+            like_frac = metadata['votes_up'] / total_votes
         thumbnails.append(thumbnail)
         like_fracs.append(like_frac)
         views.append(metadata['views'])
