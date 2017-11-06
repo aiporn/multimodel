@@ -38,7 +38,7 @@ class PopularityPredictor:
         return self._views
 
     def loss(self, actual_like_frac, actual_views,
-             rescale_fn=lambda x: tf.clip_by_value(tf.log(x), 1, np.inf)):
+             rescale_fn=lambda x: tf.clip_by_value(tf.log(x), 0, np.inf)):
         """
         Compute the prediction loss.
 
