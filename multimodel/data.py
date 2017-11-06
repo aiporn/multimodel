@@ -15,28 +15,28 @@ import tensorflow as tf
 
 from .images import IMAGE_SIZE
 
-def hotspot_dataset(data_dir, num_timestamps=5, num_passes=5):
+def hotspot_dataset(data_dir, num_timestamps=5):
     """
     Create a dataset for training a HotspotPredictor.
 
     Args:
       data_dir: a DataDir.
       num_timestamps: the number of timestamps to per video.
-      num_passes: examples to generate per video.
 
     Returns:
       A shuffled TensorFlow Dataset of (images, intensities), where images
         and intensities are batches.
     """
-    data = []
-    for _ in range(num_passes):
-        data += [pair
-                 for xs, ys in data_dir.hotspot_data(num_timestamps=num_timestamps)
-                 for pair in zip(xs, ys)]
-    paths, labels = zip(*data)
-    dataset = tf.data.Dataset.from_tensor_slices((tf.constant(paths),
-                                                  tf.constant(labels, dtype=tf.float32)))
-    return dataset.map(_read_image_in_tuple).batch(num_timestamps)
+    def generator_fn():
+        """
+        Generate hotspot data points.
+        """
+        for thumbs, counts in data_dir.hotspot_data(num_timestamps=num_timestamps):
+            for thumb, count in zip(thumbs, counts):
+                yield thumb, count
+    dataset = tf.data.Dataset.from_generator(generator_fn, (tf.int32, tf.float32),
+                                             output_shapes=((2,), ()))
+    return dataset.map(_thumbnail_reader(data_dir)).batch(num_timestamps)
 
 def popularity_dataset(data_dir):
     """
@@ -48,20 +48,20 @@ def popularity_dataset(data_dir):
     Returns:
       A shuffled TensorFlow Dataset of (image, like_frac, views) tuples.
     """
-    thumbnails, like_fracs, views = [], [], []
-    for thumbnail, _, metadata in data_dir.all_thumbnails():
-        total_votes = metadata['votes_up'] + metadata['votes_down']
-        if total_votes == 0:
-            like_frac = 0.5
-        else:
-            like_frac = metadata['votes_up'] / total_votes
-        thumbnails.append(thumbnail)
-        like_fracs.append(like_frac)
-        views.append(metadata['views'])
-    dataset = tf.data.Dataset.from_tensor_slices((tf.constant(thumbnails),
-                                                  tf.constant(like_fracs, dtype=tf.float32),
-                                                  tf.constant(views, dtype=tf.float32)))
-    return dataset.shuffle(buffer_size=20000).map(_read_image_in_tuple)
+    def generator_fn():
+        """
+        Generate tagger data points.
+        """
+        for video_id, timestamp, metadata in data_dir.all_thumbnails():
+            total_votes = metadata['votes_up'] + metadata['votes_down']
+            if total_votes == 0:
+                like_frac = 0.5
+            else:
+                like_frac = metadata['votes_up'] / total_votes
+            yield (video_id, timestamp), like_frac, metadata['views']
+    dataset = tf.data.Dataset.from_generator(generator_fn, (tf.int32, tf.float32, tf.float32),
+                                             output_shapes=((2,), (), ()))
+    return dataset.shuffle(buffer_size=20000).map(_thumbnail_reader(data_dir))
 
 def category_dataset(data_dir, labels):
     """
@@ -74,13 +74,15 @@ def category_dataset(data_dir, labels):
     Returns:
       A shuffled TensorFlow Dataset of (image, categories) pairs.
     """
-    thumbnails, bitmasks = [], []
-    for thumbnail, _, metadata in data_dir.all_thumbnails():
-        thumbnails.append(thumbnail)
-        bitmasks.append([l in metadata['categories'] for l in labels])
-    dataset = tf.data.Dataset.from_tensor_slices((tf.constant(thumbnails),
-                                                  tf.constant(bitmasks)))
-    return dataset.shuffle(buffer_size=20000).map(_read_image_in_tuple)
+    def generator_fn():
+        """
+        Generate category data points.
+        """
+        for video_id, timestamp, metadata in data_dir.all_thumbnails():
+            yield (video_id, timestamp), [l in metadata['categories'] for l in labels]
+    dataset = tf.data.Dataset.from_generator(generator_fn, (tf.int32, tf.bool),
+                                             output_shapes=((2,), (len(labels),)))
+    return dataset.shuffle(buffer_size=20000).map(_thumbnail_reader(data_dir))
 
 class DataDir:
     """
@@ -131,8 +133,8 @@ class DataDir:
 
         Returns:
           An iterator over tuples with three entries:
-            thumbnail_path: path to thumbnail image.
-            thumbnail_time: time of thumbnail in second.
+            video_id_index: index of video ID in self.video_ids.
+            thumbnail_time: time of thumbnail in seconds.
             metadata: video metadata.
 
         The metadata contains the following keys:
@@ -155,15 +157,24 @@ class DataDir:
 
         Returns:
           A sequence of tuples with two entries:
-            thumbnail_path: path to thumbnail image.
+            video_id_index: index of video ID in self.video_ids.
             thumbnail_time: timestamp of the thumbnail.
         """
         thumbs = glob.glob(os.path.join(self._id_to_path[video_id], 'thumbnail_*.*'))
         pairs = []
+        id_index = self.video_ids.index(video_id)
         for thumb_path in thumbs:
             timestamp = int(thumb_path.split('_')[-1].split('.')[0])
-            pairs.append((thumb_path, timestamp))
+            pairs.append((id_index, timestamp))
         return sorted(pairs, key=lambda x: x[1])
+
+    def video_thumbnail_path(self, video_id, timestamp):
+        """
+        Get the path to the thumbnail at the given timestamp.
+
+        The returned path is not guaranteed to exist.
+        """
+        return os.path.join(self._id_to_path[video_id], 'thumbnail_%d.jpg'%timestamp)
 
     def hotspot_data(self, num_timestamps=5):
         """
@@ -174,18 +185,19 @@ class DataDir:
 
         Returns:
           An iterator of tuples with two entries:
-            thumbnail_paths: paths to num_timestamps thumbnails.
+            thumbnails: a list of (video_id_index, timestamp) tuples.
             intensities: a list of intensities, one per thumbnail.
         """
-        for video_id in self.video_ids:
+        while True:
+            video_id = random.choice(self.video_ids)
             hotspot_func = self.hotspot_function(video_id)
             thumbnails = [th for th in self.video_thumbnails(video_id)]
             if hotspot_func is None or len(thumbnails) < num_timestamps:
                 continue
             while len(thumbnails) > num_timestamps:
                 del thumbnails[random.randrange(len(thumbnails))]
-            paths, timestamps = zip(*thumbnails)
-            yield list(paths), [float(hotspot_func(t)) for t in timestamps]
+            _, timestamps = zip(*thumbnails)
+            yield list(thumbnails), [float(hotspot_func(t)) for t in timestamps]
 
     def hotspot_function(self, video_id):
         """
@@ -203,11 +215,25 @@ class DataDir:
         counts = metadata['hotspots']
         return interp1d(times, counts, fill_value='extrapolate')
 
-def _read_image_in_tuple(path, *args):
+def _thumbnail_reader(data_dir):
     """
-    Read the image path and keep the other data unchanged.
+    Create a callable that can be mapped over a dataset to read thumbnails.
     """
-    return (_read_image(path),) + tuple(args)
+    def thumbnail_to_path(thumbnail_info):
+        """
+        Turn thumbnail information into a path.
+        """
+        video_id = data_dir.video_ids[thumbnail_info[0]]
+        timestamp = thumbnail_info[1]
+        return data_dir.video_thumbnail_path(video_id, timestamp)
+    def map_fn(thumbnail_info, *args):
+        """
+        Load the image.
+        """
+        # TODO: avoid py_func here by moving the path logic into TF.
+        path = tf.py_func(thumbnail_to_path, [thumbnail_info], tf.string)
+        return (_read_image(path),) + tuple(args)
+    return map_fn
 
 def _read_image(path):
     """
