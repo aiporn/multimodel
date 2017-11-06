@@ -52,7 +52,7 @@ def popularity_dataset(data_dir):
         """
         Generate tagger data points.
         """
-        for video_id, timestamp, metadata in data_dir.all_thumbnails():
+        for video_id, timestamp, metadata in data_dir.shuffled_thumbnails():
             total_votes = metadata['votes_up'] + metadata['votes_down']
             if total_votes == 0:
                 like_frac = 0.5
@@ -61,7 +61,7 @@ def popularity_dataset(data_dir):
             yield (video_id, timestamp), like_frac, metadata['views']
     dataset = tf.data.Dataset.from_generator(generator_fn, (tf.int32, tf.float32, tf.float32),
                                              output_shapes=((2,), (), ()))
-    return dataset.shuffle(buffer_size=20000).map(_thumbnail_reader(data_dir))
+    return dataset.map(_thumbnail_reader(data_dir))
 
 def category_dataset(data_dir, labels):
     """
@@ -78,11 +78,11 @@ def category_dataset(data_dir, labels):
         """
         Generate category data points.
         """
-        for video_id, timestamp, metadata in data_dir.all_thumbnails():
+        for video_id, timestamp, metadata in data_dir.shuffled_thumbnails():
             yield (video_id, timestamp), [l in metadata['categories'] for l in labels]
     dataset = tf.data.Dataset.from_generator(generator_fn, (tf.int32, tf.bool),
                                              output_shapes=((2,), (len(labels),)))
-    return dataset.shuffle(buffer_size=20000).map(_thumbnail_reader(data_dir))
+    return dataset.map(_thumbnail_reader(data_dir))
 
 class DataDir:
     """
@@ -127,12 +127,12 @@ class DataDir:
         """
         return self._sorted_ids
 
-    def all_thumbnails(self):
+    def shuffled_thumbnails(self):
         """
-        Iterate over all the thumbnails in the dataset.
+        Iterate over randomly chosen thumbnails in the dataset.
 
         Returns:
-          An iterator over tuples with three entries:
+          An infinite iterator over tuples with three entries:
             video_id_index: index of video ID in self.video_ids.
             thumbnail_time: time of thumbnail in seconds.
             metadata: video metadata.
@@ -146,10 +146,12 @@ class DataDir:
           'votes_down': the number of downvotes.
           'hotspots': (possibly missing) hotspot array.
         """
-        for video_id in self.video_ids:
+        while True:
+            video_id = random.choice(self.video_ids)
             metadata = self._id_to_meta[video_id]
-            for thumb_info in self.video_thumbnails(video_id):
-                yield thumb_info + (metadata,)
+            thumbs = [th for th in self.video_thumbnails(video_id)]
+            if thumbs:
+                yield random.choice(thumbs) + (metadata,)
 
     def video_thumbnails(self, video_id):
         """
