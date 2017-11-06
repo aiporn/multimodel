@@ -192,7 +192,7 @@ class DataDir:
           timestamp and returns a view count.
         """
         metadata = self._id_to_meta[video_id]
-        if 'hotspots' not in metadata:
+        if 'hotspots' not in metadata or len(metadata['hotspots']) < 2:
             return None
         times = [i * metadata['duration'] / (len(metadata['hotspots'])-1)
                  for i, _ in enumerate(metadata['hotspots'])]
