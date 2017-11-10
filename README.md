@@ -10,6 +10,6 @@ Fitting the **full objective**, the model doesn't learn much. It seems to bottom
 
 Fitting just the **categorization objective**, the model definitely learns something but overfits quickly. After 50K iterations with learning rate 1e-4, the training loss gets down to ~0.12 while the validation loss is around ~0.14. At this point, the training loss is still decreasing steadily. Thus, it would seem that the network is capable of learning to categorize videos, but it requires more data.
 
-Fitting just the **hotspot objective**, the model doesn't learn much. The loss bottoms out at around 13.6, but it is extremely noisy. The training loss is only a tiny bit lower than the validation loss, even after 120K iterations.
+Fitting just the **hotspot objective**, the model doesn't learn much. The loss bottoms out at around 0.136, but it is extremely noisy. The training loss is only a tiny bit lower than the validation loss, even after 120K iterations.
 
 *More results pending*
