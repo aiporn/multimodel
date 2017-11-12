@@ -12,4 +12,6 @@ Fitting just the **categorization objective**, the model definitely learns somet
 
 Fitting just the **hotspot objective**, the model doesn't learn much. The loss bottoms out at around 0.136, but it is extremely noisy. The training loss is only a tiny bit lower than the validation loss, even after 120K iterations.
 
+Fitting just the **popularity objective**, the model overfits a bit but doesn't learn much overall. After ~100K iterations, the training loss is ~0.55 and the testing loss is ~0.56.
+
 *More results pending*
