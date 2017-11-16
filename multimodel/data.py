@@ -15,6 +15,8 @@ import tensorflow as tf
 
 from .images import IMAGE_SIZE
 
+IMAGE_AUGMENTATION_BORDER = 20
+
 def hotspot_dataset(data_dir, num_timestamps=5):
     """
     Create a dataset for training a HotspotPredictor.
@@ -252,15 +254,17 @@ def _read_image(path):
     image = tf.image.decode_image(data, channels=3)
     float_shape = tf.cast(tf.shape(image), tf.float32)
     rows, cols = float_shape[0], float_shape[1]
-    new_shape = tf.cond(rows > cols,
-                        true_fn=lambda: (IMAGE_SIZE, cols/rows * IMAGE_SIZE),
-                        false_fn=lambda: (rows/cols * IMAGE_SIZE, IMAGE_SIZE))
-    new_shape = tf.cast(tf.stack(new_shape), tf.int32)
+    max_size = float(IMAGE_SIZE + IMAGE_AUGMENTATION_BORDER)
+    new_shape = tf.cond(rows < cols,
+                        true_fn=lambda: (max_size, cols/rows * max_size),
+                        false_fn=lambda: (rows/cols * max_size, max_size))
+    new_shape = tf.cast(tf.ceil(tf.stack(new_shape)), tf.int32)
     image = tf.image.resize_images(image, new_shape)
-    image = tf.image.resize_image_with_crop_or_pad(image, IMAGE_SIZE, IMAGE_SIZE)
-    float_image = tf.cast(image, tf.float32) / 0xff
-    noise = tf.constant([0.0148366, 0.01253134, 0.01040762], dtype=tf.float32)
-    return float_image + noise * tf.random_normal(())
+    image = tf.random_crop(image, [IMAGE_SIZE, IMAGE_SIZE, 3])
+    image = tf.image.random_flip_left_right(image)
+    image = tf.image.random_hue(image, 0.1)
+    image = tf.image.random_brightness(image, 0.1)
+    return tf.cast(image, tf.float32) / 0xff
 
 def _is_validation(video_id):
     """
