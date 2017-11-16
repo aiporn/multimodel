@@ -6,7 +6,7 @@ Image processing models.
 
 import tensorflow as tf
 
-IMAGE_SIZE = 224
+IMAGE_SIZE = 160
 
 class ImageNetwork:
     """

@@ -249,8 +249,15 @@ def _read_image(path):
     Automatically scales the image and does data augmentation.
     """
     data = tf.read_file(path)
-    raw = tf.image.decode_image(data, channels=3)
-    image = tf.image.resize_image_with_crop_or_pad(raw, IMAGE_SIZE, IMAGE_SIZE)
+    image = tf.image.decode_image(data, channels=3)
+    float_shape = tf.cast(tf.shape(image), tf.float32)
+    rows, cols = float_shape[0], float_shape[1]
+    new_shape = tf.cond(rows > cols,
+                        true_fn=lambda: (IMAGE_SIZE, cols/rows * IMAGE_SIZE),
+                        false_fn=lambda: (rows/cols * IMAGE_SIZE, IMAGE_SIZE))
+    new_shape = tf.cast(tf.stack(new_shape), tf.int32)
+    image = tf.image.resize_images(image, new_shape)
+    image = tf.image.resize_image_with_crop_or_pad(image, IMAGE_SIZE, IMAGE_SIZE)
     float_image = tf.cast(image, tf.float32) / 0xff
     noise = tf.constant([0.0148366, 0.01253134, 0.01040762], dtype=tf.float32)
     return float_image + noise * tf.random_normal(())
