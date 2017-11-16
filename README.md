@@ -16,4 +16,6 @@ Fitting just the **popularity objective**, the model overfits a bit but doesn't 
 
 Fitting just the **like loss** portion of the **popularity objective**, the model overfits a bit. This sub-loss seems to dominate the popularity objective. The training loss gets down to ~0.530, while the validation loss is ~0.547.
 
+Fitting just the **view loss** portion of the **popularity objective**, the model overfits by a great margin. The training loss gets to 0.009, while the test loss remains at 0.021.
+
 *More results pending*
