@@ -12,7 +12,8 @@ from .images import IMAGE_SIZE, ImageNetwork
 from .popularity import PopularityPredictor
 from .tagging import CategoryTagger, all_categories
 
-def aggregate_from_data(data, num_timestamps=5, batch_size=32):
+# pylint: disable=R0914
+def aggregate_from_data(data, num_timestamps=5, batch_size=32, loss_scope='train_loss'):
     """
     Create an Aggregate for training on the given DataDir.
 
@@ -20,6 +21,7 @@ def aggregate_from_data(data, num_timestamps=5, batch_size=32):
       data: a DataDir for training.
       num_timestamps: number of timestamps for hotspot model.
       batch_size: max number of images per batch.
+      loss_scope: scope name for losses and summaries.
 
     Returns:
       A tuple containing the following:
@@ -41,7 +43,8 @@ def aggregate_from_data(data, num_timestamps=5, batch_size=32):
                     popularity_images=popularity_in,
                     category_images=categories_in,
                     num_timestamps=num_timestamps)
-    loss = agg.loss(intensities, categories_out, like_fracs, views)
+    with tf.name_scope(loss_scope):
+        loss = agg.loss(intensities, categories_out, like_fracs, views)
     return agg, loss
 
 class Aggregate:
@@ -147,9 +150,15 @@ class Aggregate:
         Returns:
           A 0-D Tensor representing the joint loss.
         """
-        return (self.hotspot_model.loss(hotspot_intensities) +
-                self.category_model.loss(categories) +
-                self.popularity_model.loss(like_fracs, views))
+        hotspot_loss = self.hotspot_model.loss(hotspot_intensities)
+        category_loss = self.category_model.loss(categories)
+        popularity_loss = self.popularity_model.loss(like_fracs, views)
+        total_loss = hotspot_loss + category_loss + popularity_loss
+        tf.summary.scalar('hotspot_loss', hotspot_loss)
+        tf.summary.scalar('category_loss', category_loss)
+        tf.summary.scalar('popularity_loss', popularity_loss)
+        tf.summary.scalar('total_loss', total_loss)
+        return total_loss
 
 def _image_or_placeholder(imgs):
     """
