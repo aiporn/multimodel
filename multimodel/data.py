@@ -252,6 +252,7 @@ def _read_image(path):
     """
     data = tf.read_file(path)
     image = tf.image.decode_image(data, channels=3)
+    image.set_shape((None, None, 3))
     float_shape = tf.cast(tf.shape(image), tf.float32)
     rows, cols = float_shape[0], float_shape[1]
     max_size = float(IMAGE_SIZE + IMAGE_AUGMENTATION_BORDER)
