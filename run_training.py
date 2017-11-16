@@ -51,7 +51,7 @@ def make_minimizer(loss, cur_iter):
 
     The learning rate may decay based on the iteration number.
     """
-    rate = 1e-3 * tf.pow(0.9999, tf.cast(cur_iter, tf.float32))
+    rate = 1e-3 * tf.pow(0.99, tf.cast(cur_iter, tf.float32)/1000)
     optim = tf.train.AdamOptimizer(learning_rate=rate)
     return optim.minimize(loss)
 
