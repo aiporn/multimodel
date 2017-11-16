@@ -9,9 +9,6 @@ import math
 import numpy as np
 import tensorflow as tf
 
-# Bring the view loss down to a reasonable magnitude.
-_VIEW_LOSS_SCALE = 1 / (math.log(1e4) ** 2)
-
 class PopularityPredictor:
     """
     A model for predicting video popularity.
@@ -56,4 +53,4 @@ class PopularityPredictor:
                                                             logits=self._like_logits)
         like_loss = tf.reduce_mean(like_loss)
         view_loss = tf.reduce_mean(tf.square(rescale_fn(actual_views) - self.views))
-        return like_loss + _VIEW_LOSS_SCALE * view_loss
+        return like_loss + view_loss
