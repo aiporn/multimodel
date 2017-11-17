@@ -53,4 +53,4 @@ class PopularityPredictor:
                                                             logits=self._like_logits)
         like_loss = tf.reduce_mean(like_loss)
         view_loss = tf.reduce_mean(tf.square(rescale_fn(actual_views) - self.views))
-        return like_loss + view_loss
+        return 0.3 * (like_loss + 0.25*view_loss)
