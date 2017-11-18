@@ -14,3 +14,7 @@ This section contains the initial results on a dump of 45K videos (a total of ov
      * **view loss:** training=0.009 validation=0.021
 
 Conclusions: There is not enough data, and/or there needs to be more data augmentation and regularization. Also, the view loss should be weighted more heavily.
+
+# After data augmentation
+
+ * **categorization objective:** with lr=1e-4 and iters=170K, training=0.142200 validation=0.159802 (still improving)
